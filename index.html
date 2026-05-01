@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calamus</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="libs/ort.min.js"></script>
+    <script src="libs/xlsx.full.min.js"></script>
+    <style>
+      :root {
+        --wood: #2e1c15;
+        --wood-mid: #4e342e;
+        --paper: #f3e5ab;
+        --gold: #d4af37;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #1a100c;
+        font-family: "Cinzel", serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 1rem;
+        color: var(--paper);
+      }
+
+      .result {
+        font-size: 6rem;
+        color: var(--gold);
+        text-shadow: 3px 3px 0 var(--wood);
+        min-height: 120px;
+        margin-bottom: 1.2rem;
+        letter-spacing: 10px;
+      }
+
+      .canvas-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 720px;
+        border: 6px solid var(--wood-mid);
+        border-radius: 4px;
+        box-shadow:
+          0 10px 30px rgba(0, 0, 0, 0.6),
+          inset 0 0 20px rgba(0, 0, 0, 0.15);
+        background: var(--wood);
+        padding: 4px;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #fffef0;
+        cursor: crosshair;
+        touch-action: none;
+      }
+
+      .toolbar {
+        margin-top: 1.2rem;
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      button,
+      .file-btn {
+        font-family: "Cinzel", serif;
+        font-weight: 700;
+        font-size: 0.85rem;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        padding: 0.55rem 1.4rem;
+        border: 2px solid var(--wood);
+        background: linear-gradient(to bottom, var(--gold), #8c6d30);
+        color: var(--wood);
+        cursor: pointer;
+        box-shadow:
+          0 4px 0 var(--wood),
+          0 6px 10px rgba(0, 0, 0, 0.3);
+        transition: all 0.1s;
+      }
+
+      button:active,
+      .file-btn:active {
+        transform: translateY(4px);
+        box-shadow: 0 0 0 var(--wood);
+      }
+
+      .tool-btn {
+        background: linear-gradient(to bottom, #6d4c41, #3e2723);
+        color: var(--paper);
+        border-color: var(--wood-mid);
+      }
+
+      .tool-btn.active-tool {
+        background: linear-gradient(to bottom, var(--gold), #8c6d30);
+        color: var(--wood);
+        border-color: var(--wood);
+        box-shadow:
+          0 0 8px rgba(212, 175, 55, 0.4),
+          0 4px 0 var(--wood);
+      }
+
+      .divider {
+        width: 2px;
+        height: 28px;
+        background: var(--wood-mid);
+        margin: 0 0.4rem;
+      }
+
+      /* ========== CODA NUMERI ========== */
+      .queue-section {
+        margin-top: 1.2rem;
+        width: 100%;
+        max-width: 720px;
+        background: rgba(46, 28, 21, 0.55);
+        border: 2px solid var(--wood-mid);
+        border-radius: 4px;
+        padding: 1rem;
+        text-align: center;
+      }
+
+      .queue-header {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 0.6rem;
+        color: var(--gold);
+      }
+
+      .queue-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+        align-items: center;
+        min-height: 44px;
+        margin-bottom: 0.8rem;
+        padding: 0.4rem;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 3px;
+        border: 1px solid var(--wood-mid);
+      }
+
+      .queue-item {
+        background: linear-gradient(to bottom, var(--gold), #8c6d30);
+        color: var(--wood);
+        padding: 0.35rem 0.5rem 0.35rem 0.9rem;
+        border-radius: 3px;
+        font-weight: 700;
+        font-size: 1.15rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--wood);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        cursor: default;
+      }
+
+      .q-remove {
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        opacity: 0.6;
+        padding: 0.15rem 0.3rem;
+        border-radius: 2px;
+        transition: all 0.15s;
+        user-select: none;
+      }
+
+      .q-remove:hover {
+        opacity: 1;
+        color: #3e0000;
+        background: rgba(62, 0, 0, 0.2);
+      }
+
+      .queue-empty {
+        opacity: 0.5;
+        font-style: italic;
+        font-size: 0.85rem;
+      }
+
+      .queue-toolbar {
+        display: flex;
+        gap: 0.6rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      /* ========== EXCEL EXPORT ========== */
+      .export-bar {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.7rem;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+        background: rgba(46, 28, 21, 0.6);
+        padding: 0.7rem 1.2rem;
+        border-radius: 4px;
+        border: 1px solid var(--wood-mid);
+      }
+
+      .export-bar label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.9;
+      }
+
+      .export-bar input[type="text"] {
+        width: 56px;
+        text-align: center;
+        font-family: "Cinzel", serif;
+        font-size: 1rem;
+        padding: 0.35rem;
+        border: 2px solid var(--wood-mid);
+        background: var(--paper);
+        color: var(--wood);
+        border-radius: 2px;
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      .file-btn {
+        display: inline-block;
+        font-size: 0.8rem;
+        padding: 0.5rem 1.1rem;
+      }
+
+      #fileLabel {
+        font-size: 0.75rem;
+        opacity: 0.85;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status {
+        margin-top: 0.8rem;
+        font-size: 0.8rem;
+        opacity: 0.7;
+        font-style: italic;
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="result" id="resultDisplay">—</div>
+
+    <div class="canvas-wrap">
+      <canvas id="drawCanvas" width="720" height="220"></canvas>
+    </div>
+
+    <div class="toolbar">
+      <button
+        class="tool-btn active-tool"
+        id="btnPencil"
+        onclick="setTool('pencil')"
+      >
+        Matita
+      </button>
+      <button class="tool-btn" id="btnEraser" onclick="setTool('eraser')">
+        Gomma
+      </button>
+      <div class="divider"></div>
+      <button onclick="clearCanvas()">Cancella</button>
+    </div>
+
+    <!-- SEZIONE CODA -->
+    <div class="queue-section">
+      <div class="queue-header">Numeri raccolti</div>
+      <div class="queue-list" id="queueList">
+        <span class="queue-empty">Nessun numero aggiunto</span>
+      </div>
+      <div class="queue-toolbar">
+        <button onclick="addToQueue()">Aggiungi numero</button>
+        <button onclick="clearQueue()">Svuota lista</button>
+      </div>
+    </div>
+
+    <div class="export-bar">
+      <label>Colonna</label>
+      <input type="text" id="colInput" value="A" maxlength="3" />
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+      <label for="fileInput" class="file-btn">Carica Excel</label>
+      <span id="fileLabel">Nessun file — verrà creato uno nuovo</span>
+      <button onclick="exportExcel()">Esporta in Excel</button>
+    </div>
+
+    <div class="status" id="status">Caricamento motore...</div>
+
+    <script>
+      /* ========== CANVAS & TOOLS ========== */
+      const canvas = document.getElementById("drawCanvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      let isDrawing = false;
+      let currentTool = "pencil";
+
+      const TOOLS = {
+        pencil: { width: 9, color: "#1a110d" },
+        eraser: { width: 22, color: "#fffef0" },
+      };
+
+      function applyTool() {
+        const t = TOOLS[currentTool];
+        ctx.lineWidth = t.width;
+        ctx.strokeStyle = t.color;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+      }
+
+      function setTool(name) {
+        currentTool = name;
+        document
+          .getElementById("btnPencil")
+          .classList.toggle("active-tool", name === "pencil");
+        document
+          .getElementById("btnEraser")
+          .classList.toggle("active-tool", name === "eraser");
+        applyTool();
+      }
+
+      ctx.fillStyle = "#fffef0";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      applyTool();
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const s = e.touches ? e.touches[0] : e;
+        return {
+          x: (s.clientX - rect.left) * (canvas.width / rect.width),
+          y: (s.clientY - rect.top) * (canvas.height / rect.height),
+        };
+      }
+
+      function startDraw(e) {
+        isDrawing = true;
+        cancelRecognize();
+        const p = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      }
+      function moveDraw(e) {
+        if (!isDrawing) return;
+        const p = getPos(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+      function endDraw() {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.beginPath();
+        scheduleRecognize();
+      }
+
+      canvas.addEventListener("mousedown", startDraw);
+      canvas.addEventListener("mousemove", moveDraw);
+      canvas.addEventListener("mouseup", endDraw);
+      canvas.addEventListener("mouseleave", endDraw);
+      canvas.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        startDraw(e);
+      });
+      canvas.addEventListener("touchmove", (e) => {
+        e.preventDefault();
+        moveDraw(e);
+      });
+      canvas.addEventListener("touchend", endDraw);
+
+      function clearCanvas() {
+        cancelRecognize();
+        ctx.fillStyle = "#fffef0";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        document.getElementById("resultDisplay").textContent = "—";
+        setStatus("Pronto");
+      }
+
+      /* ========== AUTO RECOGNIZE ========== */
+      let autoTimer = null;
+      let isRecognizing = false;
+      function scheduleRecognize() {
+        cancelRecognize();
+        autoTimer = setTimeout(() => {
+          if (!isRecognizing) recognize();
+        }, 50);
+      }
+      function cancelRecognize() {
+        if (autoTimer) {
+          clearTimeout(autoTimer);
+          autoTimer = null;
+        }
+      }
+
+      /* ========== ONNX MODEL ========== */
+      let session = null;
+      const URL_PRIMARY = "model/mnist-12.onnx";
+
+      function setStatus(msg) {
+        document.getElementById("status").textContent = msg;
+      }
+
+      async function fetchBuffer(url) {
+        const r = await fetch(url, { cache: "force-cache" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const buf = await r.arrayBuffer();
+        const txt = new TextDecoder().decode(buf.slice(0, 60));
+        if (txt.includes("git-lfs")) throw new Error("LFS pointer");
+        return buf;
+      }
+
+      async function init() {
+        try {
+          ort.env.wasm.wasmPaths = "libs/";
+          const buf = await fetchBuffer(URL_PRIMARY);
+          session = await ort.InferenceSession.create(buf);
+          setStatus("Disegna i numeri");
+        } catch (e) {
+          setStatus("Errore caricamento modello: " + e.message);
+        }
+      }
+      init();
+
+      /* ========== MULTI-DIGIT PREPROCESSING ========== */
+      function findDigits(imgData, w, h) {
+        const d = imgData.data;
+        const visited = new Uint8Array(w * h);
+        const digits = [];
+        const ink = (i) => (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3 < 180;
+
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = y * w + x;
+            if (!visited[idx] && ink(idx)) {
+              let minX = x,
+                maxX = x,
+                minY = y,
+                maxY = y,
+                cnt = 0;
+              const stack = [idx];
+              visited[idx] = 1;
+              while (stack.length) {
+                const cur = stack.pop(),
+                  cx = cur % w,
+                  cy = Math.floor(cur / w);
+                cnt++;
+                if (cx < minX) minX = cx;
+                if (cx > maxX) maxX = cx;
+                if (cy < minY) minY = cy;
+                if (cy > maxY) maxY = cy;
+                if (cx > 0 && !visited[cur - 1] && ink(cur - 1)) {
+                  visited[cur - 1] = 1;
+                  stack.push(cur - 1);
+                }
+                if (cx < w - 1 && !visited[cur + 1] && ink(cur + 1)) {
+                  visited[cur + 1] = 1;
+                  stack.push(cur + 1);
+                }
+                if (cy > 0 && !visited[cur - w] && ink(cur - w)) {
+                  visited[cur - w] = 1;
+                  stack.push(cur - w);
+                }
+                if (cy < h - 1 && !visited[cur + w] && ink(cur + w)) {
+                  visited[cur + w] = 1;
+                  stack.push(cur + w);
+                }
+              }
+              if (cnt > 20) digits.push({ minX, maxX, minY, maxY });
+            }
+          }
+        }
+        return digits.sort((a, b) => a.minX - b.minX);
+      }
+
+      function preprocessDigit(box) {
+        const w = box.maxX - box.minX + 1;
+        const h = box.maxY - box.minY + 1;
+        const pad = 28;
+        const sz = Math.max(w, h) + pad * 2;
+
+        const tmp = document.createElement("canvas");
+        tmp.width = sz;
+        tmp.height = sz;
+        const tctx = tmp.getContext("2d");
+        tctx.fillStyle = "#ffffff";
+        tctx.fillRect(0, 0, sz, sz);
+        const ox = Math.floor((sz - w) / 2);
+        const oy = Math.floor((sz - h) / 2);
+        tctx.drawImage(canvas, box.minX, box.minY, w, h, ox, oy, w, h);
+
+        const m = document.createElement("canvas");
+        m.width = 28;
+        m.height = 28;
+        m.getContext("2d").drawImage(tmp, 0, 0, 28, 28);
+        const id = m.getContext("2d").getImageData(0, 0, 28, 28);
+
+        const raw = new Float32Array(28 * 28);
+        for (let i = 0; i < 28 * 28; i++) {
+          const r = id.data[i * 4],
+            g = id.data[i * 4 + 1],
+            b = id.data[i * 4 + 2];
+          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+          const v = (255 - gray) / 255.0;
+          raw[i] = v > 0.42 ? 0.99 : 0.0;
+        }
+
+        let mass = 0,
+          cx = 0,
+          cy = 0;
+        for (let y = 0; y < 28; y++) {
+          for (let x = 0; x < 28; x++) {
+            const v = raw[y * 28 + x];
+            mass += v;
+            cx += v * x;
+            cy += v * y;
+          }
+        }
+
+        if (mass > 0) {
+          cx = Math.round(cx / mass);
+          cy = Math.round(cy / mass);
+          const shiftX = 14 - cx,
+            shiftY = 14 - cy;
+          const centered = new Float32Array(28 * 28);
+          for (let y = 0; y < 28; y++) {
+            for (let x = 0; x < 28; x++) {
+              const sx = x - shiftX,
+                sy = y - shiftY;
+              if (sx >= 0 && sx < 28 && sy >= 0 && sy < 28)
+                centered[y * 28 + x] = raw[sy * 28 + sx];
+            }
+          }
+          return centered;
+        }
+        return raw;
+      }
+
+      function softmax(a) {
+        const mx = Math.max(...a);
+        const e = a.map((x) => Math.exp(x - mx));
+        const s = e.reduce((x, y) => x + y, 0);
+        return e.map((x) => x / s);
+      }
+
+      async function inferDigit(box) {
+        const input = preprocessDigit(box);
+        const out = await session.run({
+          [session.inputNames[0]]: new ort.Tensor(
+            "float32",
+            input,
+            [1, 1, 28, 28],
+          ),
+        });
+        const logits = out[session.outputNames[0]].data;
+        const probs = softmax(Array.from(logits));
+        return probs.indexOf(Math.max(...probs));
+      }
+
+      async function recognize() {
+        if (!session || isRecognizing) return;
+        isRecognizing = true;
+        cancelRecognize();
+        setStatus("Decifro...");
+
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const boxes = findDigits(img, canvas.width, canvas.height);
+
+        if (!boxes.length) {
+          document.getElementById("resultDisplay").textContent = "—";
+          setStatus("Nessuna cifra trovata");
+          isRecognizing = false;
+          return;
+        }
+
+        let out = "";
+        for (const b of boxes) out += await inferDigit(b);
+        document.getElementById("resultDisplay").textContent = out;
+        setStatus("Pronto");
+        isRecognizing = false;
+      }
+
+      /* ========== CODA NUMERI ========== */
+      let numberQueue = [];
+
+      function renderQueue() {
+        const list = document.getElementById("queueList");
+        if (numberQueue.length === 0) {
+          list.innerHTML = '<span class="queue-empty">Nessun numero aggiunto</span>';
+          return;
+        }
+        list.innerHTML = numberQueue.map((n, i) => `
+          <div class="queue-item">
+            <span class="q-num">${n}</span>
+            <span class="q-remove" onclick="event.stopPropagation(); removeAt(${i})" title="Rimuovi">×</span>
+          </div>
+        `).join("");
+      }
+
+      function addToQueue() {
+        const valStr = document.getElementById("resultDisplay").textContent.trim();
+        if (!valStr || valStr === "—") {
+          setStatus("Nessun numero da aggiungere");
+          return;
+        }
+        const val = parseInt(valStr, 10);
+        if (isNaN(val)) {
+          setStatus("Valore non valido");
+          return;
+        }
+        numberQueue.push(val);
+        renderQueue();
+        setStatus(`Aggiunto ${val} — totale ${numberQueue.length}`);
+        clearCanvas();
+      }
+
+      function removeAt(index) {
+        if (index < 0 || index >= numberQueue.length) return;
+        const removed = numberQueue.splice(index, 1)[0];
+        renderQueue();
+        setStatus(`Rimosso ${removed}`);
+      }
+
+      function clearQueue() {
+        numberQueue = [];
+        renderQueue();
+        setStatus("Lista svuotata");
+      }
+
+      /* ========== EXCEL EXPORT ========== */
+      let loadedWorkbook = null;
+      let loadedFileName = null;
+
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", function (e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          loadedFileName = file.name;
+          const reader = new FileReader();
+          reader.onload = function (ev) {
+            const data = new Uint8Array(ev.target.result);
+            loadedWorkbook = XLSX.read(data, { type: "array" });
+            document.getElementById("fileLabel").textContent = file.name;
+            setStatus("Excel caricato");
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+      function colToIndex(str) {
+        str = str.toUpperCase().trim();
+        let idx = 0;
+        for (let i = 0; i < str.length; i++) {
+          idx = idx * 26 + (str.charCodeAt(i) - 64);
+        }
+        return Math.max(0, idx - 1);
+      }
+
+      function getNextRow(ws, colIdx) {
+        const ref = ws["!ref"];
+        if (!ref) return 0;
+        const range = XLSX.utils.decode_range(ref);
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const cell = ws[XLSX.utils.encode_cell({ c: colIdx, r: r })];
+          if (
+            !cell ||
+            cell.v === undefined ||
+            cell.v === null ||
+            String(cell.v).trim() === ""
+          )
+            return r;
+        }
+        return range.e.r + 1;
+      }
+
+      function exportExcel() {
+        if (numberQueue.length === 0) {
+          setStatus("Nessun numero nella lista da esportare");
+          return;
+        }
+
+        const colStr = document.getElementById("colInput").value || "A";
+        const colIdx = colToIndex(colStr);
+
+        let wb = loadedWorkbook;
+        if (!wb) {
+          wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.aoa_to_sheet([[]]);
+          XLSX.utils.book_append_sheet(wb, ws, "Registro");
+        }
+
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+        const startRow = getNextRow(ws, colIdx);
+
+        const dataToWrite = numberQueue.map((v) => [v]);
+
+        XLSX.utils.sheet_add_aoa(ws, dataToWrite, {
+          origin: { r: startRow, c: colIdx },
+        });
+
+        const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([out], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = loadedFileName || "registro_numeri.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setStatus(`Esportati ${numberQueue.length} numeri in colonna ${colStr.toUpperCase()}`);
+        clearQueue();
+      }
+    </script>
+  </body>
+</html>
